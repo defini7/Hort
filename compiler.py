@@ -109,11 +109,11 @@ def main(argc: int, argv: list[str]):
         out.write("entry start\n")
         out.write("include 'INCLUDE\\win32a.inc'\n")
         out.write("section '.data' data readable writeable\n")
-        out.write("\tformat_int db '%d', 0\n")
+        out.write("\tformat_int db '%d', 10, 0\n")
         
         for t in tokens:
             if t.type == OP_STR:
-                out.write("\tformat_str db '%s', 0\n")
+                out.write("\tformat_str db '%s', 10, 0\n")
                 break
         
         str_count = 0
@@ -179,14 +179,17 @@ def main(argc: int, argv: list[str]):
                 out.write(f"\t\tinvoke printf, {format_method}, eax\n")
                 asm_stack_size -= 1
             elif t.type == OP_DROP:
-                if asm_stack_size < 0:
-                    assert False, 'Drop could not be called, because stack_size < 0'
+                assert asm_stack_size >= 0, 'Drop could not be called, because asm_stack_size < 0'
+                assert len(local_stack) >= 0, 'Drop could not be called, because len(local_stack < 0)'
                     
-                for _ in range(asm_stack_size):
+                for _ in range(asm_stack_size + len(local_stack)):
                     out.write("\t\tpop eax\n")
                     
                 if asm_stack_size > 0:
                     out.write("\t\tmov eax, 0\n")
+                    
+                asm_stack_size = 0
+                local_stack.clear()
                 
         out.write("\t\tinvoke ExitProcess, 0\n")
         out.write("section '.idata' data import readable\n")
