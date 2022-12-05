@@ -117,9 +117,7 @@ def parse(src: str):
             
     return tokens
 
-def main(argc: int, argv: list[str]):
-    assert argc >= 2, 'Please provide filename'
-    
+def main(argv: list[str], config: dict):    
     with open(argv[1] + '.hort', 'r') as f:
         tokens = parse(f.read())
         
@@ -360,5 +358,17 @@ def main(argc: int, argv: list[str]):
         
     subprocess.run(f'fasm {output_filename}')
     
-if __name__ == '__main__':
-    main(len(sys.argv), sys.argv)
+    if config['run']:
+        subprocess.run(f'./{argv[1]}')
+    
+if __name__ == '__main__':    
+    assert len(sys.argv) >= 2, 'Usage: python3 hort.py [flags]\nFlags: -r'
+    
+    config = {
+        'run': False
+    }
+    
+    for arg in [sys.argv[i][2:] for i in range(2, len(sys.argv))]:
+        config[arg] = True
+    
+    main(sys.argv, config)
