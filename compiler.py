@@ -19,16 +19,27 @@ OP_MINUS = iota()
 OP_MUL = iota()
 OP_DIV = iota()
 OP_INC = iota()
-OP_SHL = iota()
-OP_SHR = iota()
+OP_DEC = iota()
+OP_BIT_SHL = iota()
+OP_BIT_SHR = iota()
 OP_BIT_OR = iota()
 OP_BIT_XOR = iota()
 OP_BIT_AND = iota()
 OP_BIT_NOT = iota()
 
+OP_EQU = iota() # ==
+OP_NEQU = iota() # !=
+OP_LESS = iota() # <
+OP_GREATER = iota() # >
+OP_LEQU = iota() # <=
+OP_GEQU = iota() # >=
+
 OP_PUSH = iota() # push element to the stack
 OP_DROP = iota() # removes all data from the stack
 OP_PRINT = iota() # takes number from the stack and print in console
+OP_IF = iota()
+OP_ELSE = iota()
+OP_END = iota()
 
 OP_INT = iota()
 OP_STR = iota(True)
@@ -50,28 +61,31 @@ def parse(src: str):
             in_quotes = False
             dump += ' ' + word
             tokens.append(Token(OP_STR, dump))
+            dump = ''
             continue
             
         if in_quotes:
             dump += ' ' + word
             continue
         
-        if word == '+':
-            tokens.append(Token(OP_PLUS))
-        elif word == '-':
-            tokens.append(Token(OP_MINUS))
-        elif word == '*':
-            tokens.append(Token(OP_MUL))
-        elif word == '/':
-            tokens.append(Token(OP_DIV))
-        elif word == '|':
-            tokens.append(Token(OP_BIT_OR))
-        elif word == '&':
-            tokens.append(Token(OP_BIT_AND))
-        elif word == '!':
-            tokens.append(Token(OP_BIT_NOT))
-        elif word == '^':
-            tokens.append(Token(OP_BIT_XOR))
+        if word == '+': tokens.append(Token(OP_PLUS))
+        elif word == '-': tokens.append(Token(OP_MINUS))
+        elif word == '*': tokens.append(Token(OP_MUL))
+        elif word == '/': tokens.append(Token(OP_DIV))
+        elif word == '<<': tokens.append(Token(OP_BIT_SHL))
+        elif word == '>>': tokens.append(Token(OP_BIT_SHR))
+        elif word == '++': tokens.append(Token(OP_INC))
+        elif word == '--': tokens.append(Token(OP_DEC))
+        elif word == '|': tokens.append(Token(OP_BIT_OR))
+        elif word == '&': tokens.append(Token(OP_BIT_AND))
+        elif word == '!': tokens.append(Token(OP_BIT_NOT))
+        elif word == '^': tokens.append(Token(OP_BIT_XOR))
+        elif word == '==': tokens.append(Token(OP_EQU))
+        elif word == '!=': tokens.append(Token(OP_NEQU))
+        elif word == '<': tokens.append(Token(OP_LESS))
+        elif word == '>': tokens.append(Token(OP_GREATER))
+        elif word == '<=': tokens.append(Token(OP_LEQU))
+        elif word == '>=': tokens.append(Token(OP_GEQU))
         else:
             if word[0] == '"':
                 in_quotes = True
@@ -86,12 +100,12 @@ def parse(src: str):
                     word = word.replace('0x', '')
                     word = word.replace('0b', '')
                     tokens.append(Token(OP_INT, word))
-                elif word == 'print':
-                    tokens.append(Token(OP_PRINT))
-                elif word == 'drop':
-                    tokens.append(Token(OP_DROP))
-                else:
-                    assert False, 'Unexpected identifier'
+                elif word == 'print': tokens.append(Token(OP_PRINT))
+                elif word == 'drop': tokens.append(Token(OP_DROP))
+                elif word == 'if': tokens.append(Token(OP_IF))
+                elif word == 'else': tokens.append(Token(OP_ELSE))
+                elif word == 'end': tokens.append(Token(OP_END))
+                else: assert False, 'Unexpected identifier'
             else:
                 assert False, f'Unhandled token: {word}'
             
@@ -117,16 +131,21 @@ def main(argc: int, argv: list[str]):
                 break
         
         str_count = 0
-        for t in tokens:
-            if t.type == OP_STR:
-                t.id = str_count
-                out.write(f"\ts_{t.id} db {t.value}, 0\n")
+        if_count = 0
+        for i in range(len(tokens)):
+            if tokens[i].type == OP_STR:
+                tokens[i].id = str_count
+                out.write(f"\ts_{tokens[i].id} db {tokens[i].value}, 0\n")
                 str_count += 1
+            elif tokens[i].type == OP_IF:
+                tokens[i].id = if_count
+                if_count += 1
                 
         out.write("section '.code' code readable writeable executable\n")
         out.write("\tstart:\n")
         
         local_stack = []
+        if_stack = []
         asm_stack_size = 0
         
         for t in tokens:
@@ -139,48 +158,91 @@ def main(argc: int, argv: list[str]):
                 local_stack.append(OP_STR)
                 asm_stack_size += 1
             elif t.type == OP_PLUS:
-                out.write(f"\t\tpop ebx\n")
-                out.write(f"\t\tpop eax\n")
-                out.write(f"\t\tadd eax, ebx\n")
-                out.write(f"\t\tpush eax\n")
+                out.write("\t\tpop ebx\n")
+                out.write("\t\tpop eax\n")
+                out.write("\t\tadd eax, ebx\n")
+                out.write("\t\tpush eax\n")
                 asm_stack_size -= 1
             elif t.type == OP_MINUS:
-                out.write(f"\t\tpop ebx\n")
-                out.write(f"\t\tpop eax\n") 
-                out.write(f"\t\tsub eax, ebx\n")
-                out.write(f"\t\tpush eax\n")
+                out.write("\t\tpop ebx\n")
+                out.write("\t\tpop eax\n") 
+                out.write("\t\tsub eax, ebx\n")
+                out.write("\t\tpush eax\n")
                 asm_stack_size -= 1
+            elif t.type == OP_INC:
+                out.write("\t\tpop eax\n")
+                out.write("\t\tinc eax\n")
+                out.write("\t\tpush eax\n")
+            elif t.type == OP_DEC:
+                out.write("\t\tpop eax\n")
+                out.write("\t\tdec eax\n")
+                out.write("\t\tpush eax\n")
+            elif t.type == OP_BIT_SHL:
+                out.write("\t\tpop eax\n")
+                out.write("\t\tshl eax\n")
+                out.write("\t\tpush eax\n")
+            elif t.type == OP_BIT_SHR:
+                out.write("\t\tpop eax\n")
+                out.write("\t\tshr eax\n")
+                out.write("\t\tpush eax\n")
             elif t.type == OP_BIT_XOR:
-                out.write(f"\t\tpop ebx\n")
-                out.write(f"\t\tpop eax\n")
-                out.write(f"\t\txor eax, ebx\n")
-                out.write(f"\t\tpush eax\n")
+                out.write("\t\tpop ebx\n")
+                out.write("\t\tpop eax\n")
+                out.write("\t\txor eax, ebx\n")
+                out.write("\t\tpush eax\n")
                 asm_stack_size -= 1
             elif t.type == OP_BIT_OR:
-                out.write(f"\t\tpop ebx\n")
-                out.write(f"\t\tpop eax\n")
-                out.write(f"\t\tor eax, ebx\n")
-                out.write(f"\t\tpush eax\n")
+                out.write("\t\tpop ebx\n")
+                out.write("\t\tpop eax\n")
+                out.write("\t\tor eax, ebx\n")
+                out.write("\t\tpush eax\n")
                 asm_stack_size -= 1
             elif t.type == OP_BIT_AND:
-                out.write(f"\t\tpop ebx\n")
-                out.write(f"\t\tpop eax\n")
-                out.write(f"\t\tand eax, ebx\n")
-                out.write(f"\t\tpush eax\n")
+                out.write("\t\tpop ebx\n")
+                out.write("\t\tpop eax\n")
+                out.write("\t\tand eax, ebx\n")
+                out.write("\t\tpush eax\n")
                 asm_stack_size -= 1
             elif t.type == OP_BIT_NOT:
-                out.write(f"\t\tpop eax\n")
-                out.write(f"\t\tnot eax\n")
-                out.write(f"\t\tpush eax\n")
+                out.write("\t\tpop eax\n")
+                out.write("\t\tnot eax\n")
+                out.write("\t\tpush eax\n")
                 asm_stack_size -= 1
+            elif t.type == OP_EQU:
+                out.write("\t\tmov ecx, 0\n")
+                out.write("\t\tmov edx, 1\n")
+                out.write("\t\tpop eax\n")
+                out.write("\t\tpop ebx\n")
+                out.write("\t\tcmp eax, ebx\n")
+                out.write("\t\tcmove ecx, edx\n")
+                out.write("\t\tpush ecx\n")
+                asm_stack_size -= 1
+            elif t.type == OP_IF:
+                out.write("\t\tpop eax\n")
+                out.write("\t\ttest eax, eax\n")
+                out.write(f"\t\tjz addr_{t.id}\n")
+                if_stack.append(t.id)
+                asm_stack_size -= 1
+            elif t.type == OP_ELSE:
+                last = len(if_stack) - 1
+                out.write(f"\t\tjmp addr_{if_stack[last - 1] + 1}\n")
+                out.write(f"addr_{if_stack[last - 1]}:\n")
+            elif t.type == OP_END:
+                out.write(f"addr_{if_stack.pop() + 1}:\n")
             elif t.type == OP_PRINT:
-                out.write(f"\t\tpop eax\n")
+                out.write("\t\tpop eax\n")
                 format_method = 'format_int' if local_stack.pop() == OP_INT else 'format_str'
                 out.write(f"\t\tinvoke printf, {format_method}, eax\n")
                 asm_stack_size -= 1
             elif t.type == OP_DROP:
-                assert asm_stack_size >= 0, 'Drop could not be called, because asm_stack_size < 0'
-                assert len(local_stack) >= 0, 'Drop could not be called, because len(local_stack < 0)'
+                drop_error = ''
+                if asm_stack_size < 0:
+                    drop_error += f'\nDrop could not be called, because asm_stack_size < 0. Now: {asm_stack_size}'
+                
+                if len(local_stack) < 0:
+                    drop_error += f'\nDrop could not be called, because len(local_stack) < 0. Now: {len(local_stack)}'
+                    
+                assert not drop_error, drop_error
                     
                 for _ in range(asm_stack_size + len(local_stack)):
                     out.write("\t\tpop eax\n")
@@ -197,8 +259,17 @@ def main(argc: int, argv: list[str]):
         out.write("\timport kernel, ExitProcess, 'ExitProcess'\n")
         out.write("\timport msvcrt, printf, 'printf'\n")
         
-        assert asm_stack_size == 0, f'Stack is not cleaned somewhere. Stack size: {asm_stack_size}'
-        assert len(local_stack) == 0, f'Local stack is not cleaned somewhere. Stack size: {len(local_stack)}'
+        stack_error = ''
+        if asm_stack_size != 0:
+            stack_error += f'\nAsm stack is not cleaned somewhere. Stack size: {asm_stack_size}'
+            
+        if len(local_stack) != 0:
+            stack_error += f'\nLocal stack is not cleaned somewhere. Stack size: {len(local_stack)}'
+            
+        if len(if_stack) != 0:
+            stack_error += f'\nIf is not closed with end somewhere. Not closed ifs: {len(if_stack)}'
+            
+        assert stack_error, stack_error
         
     subprocess.run(f'fasm {output_filename}')
     
