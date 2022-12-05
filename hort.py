@@ -38,6 +38,7 @@ OP_PUSH = iota() # push element to the stack
 OP_DROP = iota() # removes all data from the stack
 OP_COPY = iota() # gives last element from the stack
 OP_PRINT = iota() # takes number from the stack and print in console
+OP_PRINTLN = iota()
 OP_IF = iota()
 OP_WHILE = iota()
 OP_DO = iota()
@@ -104,6 +105,7 @@ def parse(src: str):
                     word = word.replace('0b', '')
                     tokens.append(Token(OP_INT, word))
                 elif word == 'print': tokens.append(Token(OP_PRINT))
+                elif word == 'println': tokens.append(Token(OP_PRINTLN))
                 elif word == 'drop': tokens.append(Token(OP_DROP))
                 elif word == 'copy': tokens.append(Token(OP_COPY))
                 elif word == 'if': tokens.append(Token(OP_IF))
@@ -127,11 +129,27 @@ def main(argv: list[str], config: dict):
         out.write("entry start\n")
         out.write("include 'INCLUDE\\win32a.inc'\n")
         out.write("section '.data' data readable writeable\n")
-        out.write("\tformat_int db '%d', 10, 0\n")
         
+        know_about_str = False
+        know_about_int = False
         for t in tokens:
-            if t.type == OP_STR:
-                out.write("\tformat_str db '%s', 10, 0\n")
+            if t.type == OP_STR and not know_about_str:
+                out.write("\tformat_str db '%s', 0\n")
+                know_about_str = True
+            elif t.type == OP_INT and not know_about_int:
+                out.write("\tformat_int db '%d', 0\n")
+                know_about_int = True
+                
+            if know_about_int and know_about_str:
+                break
+            
+        for t in tokens:
+            if t.type == OP_PRINTLN:
+                if know_about_str:
+                    out.write("\tformat_str_n db '%s', 10, 0\n")
+                if know_about_int:
+                    out.write("\tformat_int_n db '%d', 10, 0\n")
+                    
                 break
         
         str_count = 0
@@ -310,6 +328,12 @@ def main(argv: list[str], config: dict):
             elif t.type == OP_PRINT:
                 out.write("\t\tpop eax\n")
                 format_method = 'format_int' if local_stack.pop() == OP_INT else 'format_str'
+                out.write(f"\t\tcinvoke printf, {format_method}, eax\n")
+                out.write(f"\t\txor eax, eax\n")
+                asm_stack_size -= 1
+            elif t.type == OP_PRINTLN:
+                out.write("\t\tpop eax\n")
+                format_method = 'format_int_n' if local_stack.pop() == OP_INT else 'format_str_n'
                 out.write(f"\t\tcinvoke printf, {format_method}, eax\n")
                 out.write(f"\t\txor eax, eax\n")
                 asm_stack_size -= 1
