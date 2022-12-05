@@ -36,8 +36,11 @@ OP_GEQU = iota() # >=
 
 OP_PUSH = iota() # push element to the stack
 OP_DROP = iota() # removes all data from the stack
+OP_COPY = iota() # gives last element from the stack
 OP_PRINT = iota() # takes number from the stack and print in console
 OP_IF = iota()
+OP_WHILE = iota()
+OP_DO = iota()
 OP_ELSE = iota()
 OP_END = iota()
 
@@ -102,7 +105,10 @@ def parse(src: str):
                     tokens.append(Token(OP_INT, word))
                 elif word == 'print': tokens.append(Token(OP_PRINT))
                 elif word == 'drop': tokens.append(Token(OP_DROP))
+                elif word == 'copy': tokens.append(Token(OP_COPY))
                 elif word == 'if': tokens.append(Token(OP_IF))
+                elif word == 'while': tokens.append(Token(OP_WHILE))
+                elif word == 'do': tokens.append(Token(OP_DO))
                 elif word == 'else': tokens.append(Token(OP_ELSE))
                 elif word == 'end': tokens.append(Token(OP_END))
                 else: assert False, 'Unexpected identifier'
@@ -131,21 +137,25 @@ def main(argc: int, argv: list[str]):
                 break
         
         str_count = 0
-        if_count = 0
+        if_index = 0
+        while_index = 1
         for i in range(len(tokens)):
             if tokens[i].type == OP_STR:
                 tokens[i].id = str_count
                 out.write(f"\ts_{tokens[i].id} db {tokens[i].value}, 0\n")
                 str_count += 1
             elif tokens[i].type == OP_IF:
-                tokens[i].id = if_count
-                if_count += 1
+                tokens[i].id = if_index
+                if_index += 1
+            elif tokens[i].type == OP_WHILE:
+                tokens[i].id = while_index
+                while_index += 2
                 
         out.write("section '.code' code readable writeable executable\n")
         out.write("\tstart:\n")
         
         local_stack = []
-        if_stack = []
+        if_while_stack = []
         asm_stack_size = 0
         
         for t in tokens:
@@ -211,28 +221,99 @@ def main(argc: int, argv: list[str]):
             elif t.type == OP_EQU:
                 out.write("\t\tmov ecx, 0\n")
                 out.write("\t\tmov edx, 1\n")
-                out.write("\t\tpop eax\n")
                 out.write("\t\tpop ebx\n")
+                out.write("\t\tpop eax\n")
                 out.write("\t\tcmp eax, ebx\n")
                 out.write("\t\tcmove ecx, edx\n")
                 out.write("\t\tpush ecx\n")
+                local_stack.pop()
+                local_stack.pop()
+                asm_stack_size -= 1
+            elif t.type == OP_NEQU:
+                out.write("\t\tmov ecx, 0\n")
+                out.write("\t\tmov edx, 1\n")
+                out.write("\t\tpop ebx\n")
+                out.write("\t\tpop eax\n")
+                out.write("\t\tcmp eax, ebx\n")
+                out.write("\t\tcmovne ecx, edx\n")
+                out.write("\t\tpush ecx\n")
+                local_stack.pop()
+                local_stack.pop()
+                asm_stack_size -= 1
+            elif t.type == OP_GREATER:
+                out.write("\t\tmov ecx, 0\n")
+                out.write("\t\tmov edx, 1\n")
+                out.write("\t\tpop ebx\n")
+                out.write("\t\tpop eax\n")
+                out.write("\t\tcmp eax, ebx\n")
+                out.write("\t\tcmovg ecx, edx\n")
+                out.write("\t\tpush ecx\n")
+                local_stack.pop()
+                local_stack.pop()
+                asm_stack_size -= 1
+            elif t.type == OP_LESS:
+                out.write("\t\tmov ecx, 0\n")
+                out.write("\t\tmov edx, 1\n")
+                out.write("\t\tpop ebx\n")
+                out.write("\t\tpop eax\n")
+                out.write("\t\tcmp eax, ebx\n")
+                out.write("\t\tcmovl ecx, edx\n")
+                out.write("\t\tpush ecx\n")
+                local_stack.pop()
+                local_stack.pop()
+                asm_stack_size -= 1
+            elif t.type == OP_GEQU:
+                out.write("\t\tmov ecx, 0\n")
+                out.write("\t\tmov edx, 1\n")
+                out.write("\t\tpop ebx\n")
+                out.write("\t\tpop eax\n")
+                out.write("\t\tcmp eax, ebx\n")
+                out.write("\t\tcmovge ecx, edx\n")
+                out.write("\t\tpush ecx\n")
+                local_stack.pop()
+                local_stack.pop()
+                asm_stack_size -= 1
+            elif t.type == OP_LEQU:
+                out.write("\t\tmov ecx, 0\n")
+                out.write("\t\tmov edx, 1\n")
+                out.write("\t\tpop ebx\n")
+                out.write("\t\tpop eax\n")
+                out.write("\t\tcmp eax, ebx\n")
+                out.write("\t\tcmovle ecx, edx\n")
+                out.write("\t\tpush ecx\n")
+                local_stack.pop()
+                local_stack.pop()
                 asm_stack_size -= 1
             elif t.type == OP_IF:
                 out.write("\t\tpop eax\n")
                 out.write("\t\ttest eax, eax\n")
                 out.write(f"\t\tjz addr_{t.id}\n")
-                if_stack.append(t.id)
+                if_while_stack.append(Token(OP_IF, t.id))
                 asm_stack_size -= 1
             elif t.type == OP_ELSE:
-                last = len(if_stack) - 1
-                out.write(f"\t\tjmp addr_{if_stack[last - 1] + 1}\n")
-                out.write(f"addr_{if_stack[last - 1]}:\n")
+                i = len(if_while_stack) - 2
+                out.write(f"\t\tjmp addr_{if_while_stack[i].value + 1}\n")
+                out.write(f"addr_{if_while_stack[i].value}:\n")
+            elif t.type == OP_WHILE:
+                out.write(f"addr_{t.id + 1}:\n")
+                if_while_stack.append(Token(OP_WHILE, t.id))
+            elif t.type == OP_DO:
+                out.write("\t\tpop eax\n")
+                out.write("\t\ttest eax, eax\n")
+                out.write(f"\t\tjz addr_{if_while_stack[len(if_while_stack) - 1].value}\n")
+                asm_stack_size -= 1
             elif t.type == OP_END:
-                out.write(f"addr_{if_stack.pop() + 1}:\n")
+                v = if_while_stack.pop()
+                
+                if v.type == OP_WHILE:
+                    out.write(f"\t\tjmp addr_{v.value + 1}\n")
+                
+                out.write(f"addr_{v.value}:\n")
             elif t.type == OP_PRINT:
                 out.write("\t\tpop eax\n")
                 format_method = 'format_int' if local_stack.pop() == OP_INT else 'format_str'
-                out.write(f"\t\tinvoke printf, {format_method}, eax\n")
+                out.write(f"\t\tcinvoke printf, {format_method}, eax\n")
+                out.write(f"\t\txor eax, eax\n")
                 asm_stack_size -= 1
             elif t.type == OP_DROP:
                 drop_error = ''
@@ -248,10 +329,16 @@ def main(argc: int, argv: list[str]):
                     out.write("\t\tpop eax\n")
                     
                 if asm_stack_size > 0:
-                    out.write("\t\tmov eax, 0\n")
+                    out.write("\t\txor eax, eax\n")
                     
                 asm_stack_size = 0
                 local_stack.clear()
+            elif t.type == OP_COPY:
+                out.write("\t\tpop eax\n")
+                out.write("\t\tpush eax\n")
+                out.write("\t\tpush eax\n")
+                local_stack.append(local_stack[len(local_stack) - 1])
+                asm_stack_size += 1
                 
         out.write("\t\tinvoke ExitProcess, 0\n")
         out.write("section '.idata' data import readable\n")
@@ -261,15 +348,15 @@ def main(argc: int, argv: list[str]):
         
         stack_error = ''
         if asm_stack_size != 0:
-            stack_error += f'\nAsm stack is not cleaned somewhere. Stack size: {asm_stack_size}'
+            stack_error += f'Asm stack is not cleaned somewhere. Stack size: {asm_stack_size}\n'
             
         if len(local_stack) != 0:
-            stack_error += f'\nLocal stack is not cleaned somewhere. Stack size: {len(local_stack)}'
+            stack_error += f'Local stack is not cleaned somewhere. Stack size: {len(local_stack)}\n'
             
-        if len(if_stack) != 0:
-            stack_error += f'\nIf is not closed with end somewhere. Not closed ifs: {len(if_stack)}'
-            
-        assert stack_error, stack_error
+        if len(if_while_stack) != 0:
+            stack_error += f'If is not closed with end somewhere. Not closed ifs: {len(if_while_stack)}\n'
+        
+        assert stack_error == '', stack_error
         
     subprocess.run(f'fasm {output_filename}')
     
