@@ -36,6 +36,7 @@ OP_GEQU = iota() # >=
 
 OP_PUSH = iota() # push element to the stack
 OP_DROP = iota() # removes all data from the stack
+OP_POP = iota() # removes last element from the stack
 OP_COPY = iota() # gives last element from the stack
 OP_PRINT = iota() # takes number from the stack and print in console
 OP_PRINTLN = iota()
@@ -47,6 +48,40 @@ OP_END = iota()
 
 OP_INT = iota()
 OP_STR = iota(True)
+
+reserved_ops = {
+    '+': OP_PLUS,
+    '-': OP_MINUS,
+    '*': OP_MUL,
+    '/': OP_DIV,
+    '++': OP_INC,
+    '--': OP_DEC,
+    '<<': OP_BIT_SHL,
+    '>>': OP_BIT_SHR,
+    '|': OP_BIT_OR,
+    '^': OP_BIT_XOR,
+    '&': OP_BIT_AND,
+    '!': OP_BIT_NOT,
+    '==': OP_EQU,
+    '!=': OP_NEQU,
+    '<': OP_LESS,
+    '>': OP_GREATER,
+    '<=': OP_LEQU,
+    '>=': OP_GEQU
+}
+
+#reserved_keywords = {
+#    'push': OP_PUSH,
+#    'drop': OP_DROP,
+#    'copy': OP_COPY,
+#    'print': OP_PRINT,
+#    'println': OP_PRINTLN,
+#    'if': OP_IF,
+#    'while': OP_WHILE,
+#    'do': OP_DO,
+#    'else': OP_ELSE, 
+#    'end': OP_END
+#}
 
 class Token:
     def __init__(self, tok_type: int, value=None, tok_id=0):
@@ -72,24 +107,8 @@ def parse(src: str):
             dump += ' ' + word
             continue
         
-        if word == '+': tokens.append(Token(OP_PLUS))
-        elif word == '-': tokens.append(Token(OP_MINUS))
-        elif word == '*': tokens.append(Token(OP_MUL))
-        elif word == '/': tokens.append(Token(OP_DIV))
-        elif word == '<<': tokens.append(Token(OP_BIT_SHL))
-        elif word == '>>': tokens.append(Token(OP_BIT_SHR))
-        elif word == '++': tokens.append(Token(OP_INC))
-        elif word == '--': tokens.append(Token(OP_DEC))
-        elif word == '|': tokens.append(Token(OP_BIT_OR))
-        elif word == '&': tokens.append(Token(OP_BIT_AND))
-        elif word == '!': tokens.append(Token(OP_BIT_NOT))
-        elif word == '^': tokens.append(Token(OP_BIT_XOR))
-        elif word == '==': tokens.append(Token(OP_EQU))
-        elif word == '!=': tokens.append(Token(OP_NEQU))
-        elif word == '<': tokens.append(Token(OP_LESS))
-        elif word == '>': tokens.append(Token(OP_GREATER))
-        elif word == '<=': tokens.append(Token(OP_LEQU))
-        elif word == '>=': tokens.append(Token(OP_GEQU))
+        op = reserved_ops.get(word)
+        if op is not None: tokens.append(Token(op))
         else:
             if word[0] == '"':
                 in_quotes = True
@@ -108,6 +127,7 @@ def parse(src: str):
                 elif word == 'println': tokens.append(Token(OP_PRINTLN))
                 elif word == 'drop': tokens.append(Token(OP_DROP))
                 elif word == 'copy': tokens.append(Token(OP_COPY))
+                elif word == 'pop': tokens.append(Token(OP_POP))
                 elif word == 'if': tokens.append(Token(OP_IF))
                 elif word == 'while': tokens.append(Token(OP_WHILE))
                 elif word == 'do': tokens.append(Token(OP_DO))
@@ -361,6 +381,10 @@ def main(argv: list[str], config: dict):
                 out.write("\t\tpush eax\n")
                 local_stack.append(local_stack[len(local_stack) - 1])
                 asm_stack_size += 1
+            elif t.type == OP_POP:
+                out.write("\t\tpop eax\n")
+                local_stack.pop()
+                asm_stack_size -= 1
                 
         out.write("\t\tinvoke ExitProcess, 0\n")
         out.write("section '.idata' data import readable\n")
@@ -378,7 +402,7 @@ def main(argv: list[str], config: dict):
         if len(if_while_stack) != 0:
             stack_error += f'If is not closed with end somewhere. Not closed ifs: {len(if_while_stack)}\n'
         
-        assert stack_error == '', stack_error
+        assert not stack_error, stack_error
         
     subprocess.run(f'fasm {output_filename}')
     
