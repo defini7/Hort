@@ -1,0 +1,7 @@
+/INCLUDE
+/SOURCE
+/TOOLS
+/__pycache__
+*.exe
+/*.s
+/*.hort

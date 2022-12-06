@@ -1,0 +1,9 @@
+10 while copy 0 >= do
+    copy print
+
+    copy 5 == if
+        "Happy!!!" print
+    end
+
+    1 -
+end drop
