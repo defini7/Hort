@@ -1,19 +1,19 @@
 34 35 + 69 == if
-    69 print
+    69 println
 
     100 200 + 300 == if
-        300 print
+        300 println
 
         52 60 + 112 == if
-            112 print
+            112 println
         end
     end
 
 else
-    420 print
+    420 println
 
     52 60 + 112 == if
-        112 print
+        112 println
     end
 
 end

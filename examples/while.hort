@@ -1,8 +1,8 @@
 10 while copy 0 >= do
-    copy print
+    copy println
 
     copy 5 == if
-        "Happy!!!" print
+        "Happy!!!" println
     end
 
     1 -

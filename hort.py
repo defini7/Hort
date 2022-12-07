@@ -205,7 +205,7 @@ def main(argv: list[str], config: dict):
                 local_stack.append(OP_INT)
                 asm_stack_size += 1
             elif t.type == OP_STR:
-                out.write(operations.push(t))
+                out.write(operations.push(f's_{t.id}'))
                 local_stack.append(OP_STR)
                 asm_stack_size += 1
             elif t.type == OP_PLUS:
